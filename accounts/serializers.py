@@ -36,16 +36,16 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "email", "first_name", "last_name", "role"]
 
 class UpdateUserSerializer(serializers.ModelSerializer):
-    # نجعل role للقراءة فقط هنا (المستخدم العادي لا يغير الدور)
+    
     role = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
-        # عدلي الحقول حسب ما تريدين فتحه للمستخدم
+        
         fields = ["username", "email", "first_name", "last_name", "role"]
 
     def validate_email(self, value):
-        # السماح لنفس الإيميل أو التحقق من فريدته لباقي المستخدمين
+       
         user = self.context["request"].user
         if value and User.objects.exclude(pk=user.pk).filter(email=value).exists():
             raise serializers.ValidationError("This email is already in use.")
@@ -82,7 +82,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 "code": "invalid_credentials"
             }) from exc
 
-        # include user info alongside tokens
+        
         user_data = UserSerializer(self.user).data
         data["user"] = user_data
         return data
@@ -98,15 +98,15 @@ class ChangePasswordSerializer(serializers.Serializer):
         new_password = attrs.get("new_password")
         confirm_new_password = attrs.get("confirm_new_password")
 
-        # 1) تحقق من القديمة
+        
         if not user.check_password(old_password):
             raise serializers.ValidationError({"old_password": "Old password is incorrect."})
 
-        # 2) تطابق الجديدة والتأكيد
+       
         if new_password != confirm_new_password:
             raise serializers.ValidationError({"confirm_new_password": "Passwords do not match."})
 
-        # 3) مرّر الجديدة على مدقّقات Django
+       
         validate_password(new_password, user=user)
 
         return attrs

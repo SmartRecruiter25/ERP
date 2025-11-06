@@ -24,7 +24,7 @@ class IsManagerOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role in ["manager", "admin"]
 
-# مثال صلاحية كائنية (Object-Level): المالك أو الأدمن
+
 class IsOwnerOrAdmin(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         return (

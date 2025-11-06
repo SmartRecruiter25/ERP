@@ -71,7 +71,6 @@ class ProfileView(APIView):
 
     def get_permissions(self):
         base = super().get_permissions()
-        # أضيفي صلاحية كائنية لهذه الـ view
         self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
         return [perm for perm in base]
 
@@ -83,16 +82,13 @@ class UserListView(generics.ListAPIView):
 class UpdateUserView(generics.UpdateAPIView):
     serializer_class = UpdateUserSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-    # نسمح بـ PUT و PATCH، الافتراضي في UpdateAPIView يدعمهم
     http_method_names = ["put", "patch", "options", "head"]
 
     def get_object(self):
-        # نعيد المستخدم الحالي فقط
         return self.request.user
 
     def get_serializer_context(self):
-        # حتى نستخدم request داخل الـ serializer (للتحقق من الإيميل/اليوزرنيم)
+       
         ctx = super().get_serializer_context()
         ctx.update({"request": self.request})
         return ctx
@@ -122,14 +118,10 @@ class ChangePasswordView(APIView):
         user.set_password(new_password)
         user.save()
 
-        # خيار 1: إبقاء المستخدم مسجّل الدخول (Session-based). مع JWT غالبًا غير ضروري.
-        # update_session_auth_hash(request, user)
-
-        # خيار 2 (مستحسن مع JWT): اطلب من الفرونت حذف التوكنات والـ re-login
         return Response({"detail": "Password changed successfully. Please log in again."}, status=status.HTTP_200_OK)
 
 class AdminChangeUserRoleView(generics.UpdateAPIView):
     queryset = User.objects.all()
     serializer_class = AdminChangeUserRoleSerializer
     permission_classes = [IsAdmin]
-    lookup_field = "id"   # تعديل حسب المفتاح الذي ستستخدمينه في URL
+    lookup_field = "id"   
