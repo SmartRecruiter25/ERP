@@ -8,7 +8,11 @@ from .views import ( RegisterView,
         EmployeeListView, 
         ManagerDashboardView , ChangePasswordView ,
         UpdateUserView , 
-        AdminChangeUserRoleView
+        AdminChangeUserRoleView , 
+        EmployeeOnboardingView , 
+        AdminUserListView,         
+        AdminToggleUserStatusView,  
+        AdminDeleteUserView,
 )
 
 from rest_framework_simplejwt.views import (
@@ -30,7 +34,8 @@ urlpatterns = [
     path("change-password/", ChangePasswordView.as_view(), name="change_password"),
     path("update-user/", UpdateUserView.as_view(), name="update_user"),
     path("admin/users/<int:id>/change-role/", AdminChangeUserRoleView.as_view(), name="admin_change_role"),
-
-
-
+    path("onboarding/employee/", EmployeeOnboardingView.as_view(), name="employee_onboarding"),
+    path("admin/users/", AdminUserListView.as_view(), name="admin_users"),
+    path("admin/users/<int:id>/toggle-status/", AdminToggleUserStatusView.as_view(), name="admin_toggle_status"),
+    path("admin/users/<int:id>/delete/", AdminDeleteUserView.as_view(), name="admin_delete_user"),
 ]

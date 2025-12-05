@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-948beets8m6&=((8m*d_tfd1hmwjd^we7ejxmh(voqpz_@paak
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*", "127.0.0.1", "localhost", "172.16.30.127"]
 
 
 # Application definition
@@ -42,8 +42,12 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
     "rest_framework_simplejwt.token_blacklist",
+    'hr',
+    'manager',
     "corsheaders",
     "accounts",
+    "admin_panel",
+    
     
 ]
 
@@ -141,6 +145,7 @@ REST_FRAMEWORK = {
     ),
 }
 CORS_ALLOW_ALL_ORIGINS = True 
+
 
 # اختياري: إعدادات JWT
 from datetime import timedelta

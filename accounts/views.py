@@ -4,26 +4,30 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model , update_session_auth_hash
 from .serializers import (
-    RegisterSerializer,
-     UserSerializer,
+      RegisterSerializer,
+      UserSerializer,
       CustomTokenObtainPairSerializer ,
-      ProfileSerializer, 
-      UserSerializer , 
+      ProfileSerializer,
       ChangePasswordSerializer ,
       UpdateUserSerializer ,
       AdminChangeUserRoleSerializer ,
+      EmployeeOnboardingSerializer ,
+      AdminUserListSerializer ,
+
 )
 from .models import Profile , User
+from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from . permissions import IsHR , IsManager , IsAdmin , IsEmployee ,  IsHRorAdmin, IsManagerOrAdmin , IsOwnerOrAdmin
+from admin_panel.models import AuditLog
 
 User = get_user_model()
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -124,4 +128,74 @@ class AdminChangeUserRoleView(generics.UpdateAPIView):
     queryset = User.objects.all()
     serializer_class = AdminChangeUserRoleSerializer
     permission_classes = [IsAdmin]
-    lookup_field = "id"   
+    lookup_field = "id" 
+    def perform_update(self, serializer):
+        target_user = serializer.save()
+        actor = self.request.user
+        
+        action_text = f"Changed role for user {target_user.username} to {target_user.role}"
+
+        AuditLog.objects.create(
+            actor=actor,
+            action=action_text,
+        )
+
+class EmployeeOnboardingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = EmployeeOnboardingSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        employee = serializer.save()
+        return Response(
+            {
+                "detail": "Employee profile created successfully.",
+                "employee_id": employee.id,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+class AdminUserListView(generics.ListAPIView):
+    queryset = User.objects.all().select_related("profile")
+    serializer_class = AdminUserListSerializer
+    permission_classes = [IsAdmin]
+
+class AdminToggleUserStatusView(generics.UpdateAPIView):
+   
+    queryset = User.objects.all()
+    serializer_class = AdminUserListSerializer
+    permission_classes = [IsAdmin]
+    lookup_field = "id"
+
+    def update(self, request, *args, **kwargs):
+        user = self.get_object()
+
+        user.is_active = not user.is_active
+        user.save()
+
+        status_label = "activated" if user.is_active else "deactivated"
+        AuditLog.objects.create(
+            actor=request.user,
+            action=f"{status_label.capitalize()} user {user.username}",
+        )
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
+
+
+class AdminDeleteUserView(generics.DestroyAPIView):
+   
+    queryset = User.objects.all()
+    permission_classes = [IsAdmin]
+    lookup_field = "id"
+
+    def perform_destroy(self, instance):
+        username = instance.username
+        super().perform_destroy(instance)
+
+        AuditLog.objects.create(
+            actor=self.request.user,
+            action=f"Deleted user {username}",
+        )
