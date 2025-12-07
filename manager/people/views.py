@@ -1,3 +1,4 @@
+from datetime import date
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,7 +9,8 @@ import secrets
 import string
 from manager.people.serializers import (
     EmployeeListSerializer,
-    PeopleHubSummarySerializer
+    PeopleHubSummarySerializer , 
+    EmployeeCreateSerializer , 
 )
 
 from hr.employees.models import  ( Employee,
@@ -16,11 +18,7 @@ from hr.employees.models import  ( Employee,
 )
 from .serializers import EmployeeCreateSerializer   
 from hr.ess.models import LeaveRequest, LeaveStatus
-from hr.org_structure.models import Company
-from hr.org_structure.models import Department
-
-
-from hr.org_structure.models import Department, Company  
+from hr.org_structure.models import Company , Department
 
 class PeopleHubSummaryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -89,6 +87,27 @@ class EmployeeListView(APIView):
         employees = Employee.objects.filter(company=company).select_related(
             "user", "department", "job_title"
         )
+
+        dept_id = request.query_params.get("department_id") or request.query_params.get("department")
+        if dept_id:
+            try:
+                qs = qs.filter(department_id=int(dept_id))
+            except ValueError:
+                pass
+
+        status_param = request.query_params.get("status")
+        if status_param and status_param.lower() != "all":
+            qs = qs.filter(status=status_param.lower())
+
+        search = request.query_params.get("q")
+        if search:
+            qs = qs.filter(
+                Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__email__icontains=search)
+                | Q(employee_code__icontains=search)
+            )
 
         serializer = EmployeeListSerializer(
             employees,
