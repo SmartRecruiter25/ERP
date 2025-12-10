@@ -1,4 +1,3 @@
-# admin_panel/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
 
@@ -26,10 +25,7 @@ class AuditLog(models.Model):
 
 
 class Role(models.Model):
-    """
-    جدول للأدوار الخاصة بالنظام (لإدارة شاشة Manage Roles)
-    المفتاح key يطابق القيم الموجودة في User.role قدر الإمكان.
-    """
+
     key = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -48,9 +44,7 @@ class Role(models.Model):
 
 
 class SystemSetting(models.Model):
-    """
-    إعدادات عامة للنظام يمكن إدارتها من شاشة System Settings.
-    """
+  
     key = models.CharField(max_length=100, unique=True)
     value = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)

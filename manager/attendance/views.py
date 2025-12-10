@@ -10,7 +10,7 @@ from manager.attendance.serializers import (
     AttendanceSummarySerializer,
     AttendanceEmployeeSerializer,
 )
-
+from accounts.permissions import IsAdminOrHR
 from hr.attendance.models import AttendanceRecord, AttendanceStatus
 from hr.employees.models import Employee, EmployeeStatus
 from hr.org_structure.models import Company
@@ -35,7 +35,7 @@ class BaseCompanyMixin:
 
 
 class AttendanceListView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated  ,IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -81,7 +81,7 @@ class AttendanceListView(BaseCompanyMixin, APIView):
 
 
 class AttendanceSummaryView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -130,7 +130,7 @@ class AttendanceSummaryView(BaseCompanyMixin, APIView):
 
 
 class AttendanceEmployeesFilterView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)

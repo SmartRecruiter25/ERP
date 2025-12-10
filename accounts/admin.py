@@ -9,8 +9,9 @@ from .models import User, Profile
 class UserAdmin(DjangoUserAdmin):
  
     model = User
-    list_display = ("username", "email", "role", "is_staff", "is_active")
+    list_display = ("username", "email", "role", "is_staff", "is_active", "is_superuser")
     list_filter = ("role", "is_staff", "is_active", "is_superuser")
+    search_fields = ("username", "email")
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),

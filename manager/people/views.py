@@ -7,6 +7,8 @@ from django.contrib.auth import get_user_model
 
 import secrets
 import string
+from django.db.models import Q
+from accounts.permissions import IsAdminOrHR
 from manager.people.serializers import (
     EmployeeListSerializer,
     PeopleHubSummarySerializer , 
@@ -15,13 +17,12 @@ from manager.people.serializers import (
 
 from hr.employees.models import  ( Employee,
  EmployeeStatus ,
-)
-from .serializers import EmployeeCreateSerializer   
+) 
 from hr.ess.models import LeaveRequest, LeaveStatus
 from hr.org_structure.models import Company , Department
 
 class PeopleHubSummaryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         today = timezone.now().date()
@@ -70,7 +71,7 @@ class PeopleHubSummaryView(APIView):
 
 
 class EmployeeListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         today = timezone.now().date()
@@ -87,7 +88,7 @@ class EmployeeListView(APIView):
         employees = Employee.objects.filter(company=company).select_related(
             "user", "department", "job_title"
         )
-
+        qs = employees
         dept_id = request.query_params.get("department_id") or request.query_params.get("department")
         if dept_id:
             try:
@@ -118,7 +119,7 @@ class EmployeeListView(APIView):
         return Response(serializer.data)
 
 class EmployeeCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get_company(self, request):
         emp_profile = getattr(request.user, "employee_profile", None)

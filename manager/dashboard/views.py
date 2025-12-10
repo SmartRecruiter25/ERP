@@ -19,6 +19,7 @@ from hr.ess.models import (
     ApprovalStatus,
 )
 from hr.payroll.models import PayrollRun, PayrollRunStatus
+from accounts.permissions import IsAdminOrHR , IsAdminOrManager
 from hr.org_structure.models import Company, Department, CompanyNews
 
 from .serializers import (
@@ -39,7 +40,7 @@ class HRBaseCompanyMixin:
         return Company.objects.first()
 
 class DashboardSummaryView(HRBaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request, *args, **kwargs):
         today = timezone.now().date()
@@ -135,7 +136,7 @@ class DashboardSummaryView(HRBaseCompanyMixin, APIView):
         return Response(serializer.data)
 
 class MyTeamDashboardView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrManager]
 
     def get_manager_employee(self, request):
         return getattr(request.user, "employee_profile", None)
@@ -380,7 +381,7 @@ class MyTeamDashboardView(APIView):
 
 class HRMainDashboardView(HRBaseCompanyMixin, APIView):
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def _get_last_month_range(self, today):
         year = today.year

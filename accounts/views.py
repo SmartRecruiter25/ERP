@@ -19,7 +19,7 @@ from .models import Profile , User
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
-from . permissions import IsHR , IsManager , IsAdmin , IsEmployee ,  IsHRorAdmin, IsManagerOrAdmin , IsOwnerOrAdmin
+from . permissions import IsHR , IsManager , IsAdmin , IsEmployee ,  IsAdminOrHR, IsAdminOrManager , IsOwnerOrAdmin
 from admin_panel.models import AuditLog
 
 User = get_user_model()
@@ -75,13 +75,13 @@ class ProfileView(APIView):
 
     def get_permissions(self):
         base = super().get_permissions()
-        self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
+        self.permission_classes = [permissions.IsAuthenticated , IsOwnerOrAdmin]
         return [perm for perm in base]
 
 class UserListView(generics.ListAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
 class UpdateUserView(generics.UpdateAPIView):
     serializer_class = UpdateUserSerializer
@@ -100,10 +100,10 @@ class UpdateUserView(generics.UpdateAPIView):
 class EmployeeListView(generics.ListAPIView):
     queryset = User.objects.filter(role="employee")
     serializer_class = UserSerializer
-    permission_classes = [IsHR]
+    permission_classes = [IsAdminOrHR]
 
 class ManagerDashboardView(APIView):
-    permission_classes = [IsManager | IsAdmin]
+    permission_classes = [IsAdminOrManager]
 
     def get(self, request):
         return Response({"message": "Welcome Manager/Admin!"})
@@ -141,7 +141,7 @@ class AdminChangeUserRoleView(generics.UpdateAPIView):
         )
 
 class EmployeeOnboardingView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
     def post(self, request):
         serializer = EmployeeOnboardingSerializer(

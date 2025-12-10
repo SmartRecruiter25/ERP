@@ -6,7 +6,7 @@ from datetime import timedelta
 from calendar import monthrange
 
 from hr.employees.models import Employee
-
+from accounts.permissions import IsEmployee
 
 def get_employee_for_user(user):
     from django.shortcuts import get_object_or_404
@@ -27,7 +27,7 @@ def get_period_range(period):
 
 
 class ESSMyShiftsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
     def get(self, request):
         employee = get_employee_for_user(request.user)

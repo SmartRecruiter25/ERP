@@ -16,6 +16,7 @@ User = get_user_model()
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     confirm_password = serializers.CharField(write_only=True)
+    role = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
@@ -45,8 +46,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data.pop("confirm_password", None)
         password = validated_data.pop("password")
 
-        user = User(**validated_data)
+        user = User(
+            username=validated_data.get("username"),
+            email=validated_data.get("email"),
+        )
         user.set_password(password)
+        user.role = "employee"
         user.save()
         return user
 
@@ -168,6 +173,11 @@ class AdminChangeUserRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["role"]
+    def validate_role(self, value):
+        allowed_roles = ["admin", "hr", "manager", "employee"]
+        if value not in allowed_roles:
+            raise serializers.ValidationError("Invalid role.")
+        return value
 
 class EmployeeOnboardingSerializer(serializers.Serializer):
 

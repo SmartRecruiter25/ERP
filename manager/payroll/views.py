@@ -9,7 +9,7 @@ from manager.payroll.serializers import (
 )
 from hr.payroll.models import PayrollRun, PayrollRunStatus
 from hr.org_structure.models import Company
-
+from accounts.permissions import IsAdminOrHR
 
 class BaseCompanyMixin:
     def get_company(self, request):
@@ -20,7 +20,7 @@ class BaseCompanyMixin:
 
 
 class PayrollSummaryView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -72,7 +72,7 @@ class PayrollSummaryView(BaseCompanyMixin, APIView):
 
 
 class PayrollRunListView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)

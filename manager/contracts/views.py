@@ -11,7 +11,7 @@ from manager.contracts.serializers import (
 
 from hr.contracts.models import EmployeeContract, ContractStatus
 from hr.org_structure.models import Company
-
+from accounts.permissions import IsAdminOrHR
 
 class BaseCompanyMixin:
     def get_company(self, request):
@@ -22,7 +22,7 @@ class BaseCompanyMixin:
 
 
 class ContractsSummaryView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -66,7 +66,7 @@ class ContractsSummaryView(BaseCompanyMixin, APIView):
 
 
 class ContractsListView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)

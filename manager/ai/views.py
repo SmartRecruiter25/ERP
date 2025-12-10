@@ -113,16 +113,6 @@ class SmartShiftsView(BaseCompanyMixin, APIView):
 
 
 class WorkforcePlanningView(BaseCompanyMixin, APIView):
-    """
-    GET /api/manager/ai/workforce-planning/?department_id=1&period=this_month
-
-    يرجّع:
-    - current_staff      -> كرت Current Staff
-    - required_staff     -> كرت Required Staff
-    - hiring_needed      -> كرت Hiring Needed
-    - skill_gap_index    -> كرت Skill Gap Index (%)
-    - recommendations[]  -> AI Recommendations (قائمة تحت الكروت)
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
@@ -144,7 +134,6 @@ class WorkforcePlanningView(BaseCompanyMixin, APIView):
             serializer = WorkforcePlanningSerializer(data)
             return Response(serializer.data)
 
-        # 1) read query params
         dept_id = request.query_params.get("department_id")
         period = request.query_params.get("period", "this_month")
 
@@ -163,7 +152,6 @@ class WorkforcePlanningView(BaseCompanyMixin, APIView):
             except Department.DoesNotExist:
                 department = None
 
-        # 2) employees in scope
         employees_qs = Employee.objects.filter(
             company=company,
             status=EmployeeStatus.ACTIVE,
@@ -174,7 +162,6 @@ class WorkforcePlanningView(BaseCompanyMixin, APIView):
 
         current_staff = employees_qs.count()
 
-        # 3) attendance و overtime لآخر 30 يوم (لتقدير الضغط)
         last_30 = today - timedelta(days=30)
 
         attendance_qs = AttendanceRecord.objects.filter(
@@ -187,13 +174,10 @@ class WorkforcePlanningView(BaseCompanyMixin, APIView):
         total_records = attendance_qs.count()
 
         if total_records > 0:
-            overtime_ratio = overtime_days / total_records  # بين 0 و 1
+            overtime_ratio = overtime_days / total_records 
         else:
             overtime_ratio = 0.0
 
-        # 4) تقدير required_staff بشكل مبسّط
-        #    base = current_staff
-        #    لو في overtime كثير نزيد 1..3
         extra_needed = 0
         if current_staff > 0:
             if overtime_ratio > 0.30:
@@ -203,27 +187,23 @@ class WorkforcePlanningView(BaseCompanyMixin, APIView):
             elif overtime_ratio > 0.05:
                 extra_needed = 1
 
-        # زيادة بسيطة حسب الفترة (للربع الجاي مثلاً نضيف نمو متوقّع)
         growth_factor = 0.0
         if period in ["this_quarter", "next_quarter"]:
-            growth_factor = 0.10  # 10%
+            growth_factor = 0.10  
         elif period == "this_month":
-            growth_factor = 0.05  # 5%
+            growth_factor = 0.05  
 
         base_required = int(round(current_staff * (1 + growth_factor)))
         required_staff = max(current_staff, base_required + extra_needed)
 
         hiring_needed = max(required_staff - current_staff, 0)
 
-        # 5) skill_gap_index %
-        #    دمج بسيط بين حجم النقص + نسبة الـ overtime
         skill_gap_index = 0.0
         if current_staff > 0:
-            gap_component = min(20, hiring_needed * 4)          # max 20
-            overtime_component = min(10, overtime_ratio * 40)   # max 10
+            gap_component = min(20, hiring_needed * 4)      
+            overtime_component = min(10, overtime_ratio * 40)   
             skill_gap_index = round(gap_component + overtime_component, 1)
 
-        # 6) توصيات AI (rules بسيطة)
         recommendations = []
 
         if hiring_needed >= 3:

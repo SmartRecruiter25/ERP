@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions , generics
 from rest_framework.parsers import MultiPartParser, FormParser
-
+from accounts.permissions import IsEmployee
 from hr.employees.models import Employee , EmployeeDocument
 from hr.contracts.models import EmployeeContract
 from .serializers import (
@@ -33,7 +33,7 @@ def get_employee_for_user(user):
 class ESSDashboardSummaryView(APIView):
 
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
 
     def get_employee(self, user):
@@ -208,7 +208,7 @@ class ESSDashboardSummaryView(APIView):
         return Response(data)
 
 class ESSAttendanceView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
     def get_employee(self, user):
         return get_object_or_404(Employee, user=user)
@@ -259,16 +259,12 @@ class ESSAttendanceView(APIView):
             },
             "recent_logs": recent_logs,
         }
-
         return Response(data)
-
-        def get_employee_for_user(user):
-            return get_object_or_404(Employee, user=user)
 
 
 class ESSLeaveRequestsView(APIView):
    
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
     def get(self, request):
         employee = get_employee_for_user(request.user)
@@ -295,7 +291,7 @@ class ESSLeaveRequestsView(APIView):
 class ESSLeaveRequestCreateView(generics.CreateAPIView):
   
     serializer_class = LeaveRequestSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
     def perform_create(self, serializer):
         employee = get_employee_for_user(self.request.user)
@@ -304,7 +300,7 @@ class ESSLeaveRequestCreateView(generics.CreateAPIView):
 
 class ESSContractDocumentsView(APIView):
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
     def get(self, request):
         employee = get_employee_for_user(request.user)
@@ -373,7 +369,7 @@ class ESSContractDocumentsView(APIView):
 class ESSDocumentListCreateView(generics.ListCreateAPIView):
    
     serializer_class = EmployeeDocumentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -391,7 +387,7 @@ class ESSDocumentListCreateView(generics.ListCreateAPIView):
 class ESSPayslipListView(generics.ListAPIView):
  
     serializer_class = ESSPayslipSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
 
     def get_employee(self):
         user = self.request.user
@@ -423,7 +419,7 @@ class ESSPayslipListView(generics.ListAPIView):
 class ESSAnnouncementsListView(generics.ListAPIView):
     
     serializer_class = AnnouncementSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated , IsEmployee]
     pagination_class = None  
 
     def get_queryset(self):

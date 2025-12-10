@@ -11,7 +11,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
         def get_employees_count(self, obj):
-        # نحاول نستخدم العلاقة العكسية الافتراضية للموظف
+
             rel = getattr(obj, "employee_set", None)
             if rel is not None and hasattr(rel, "count"):
                 return rel.count()

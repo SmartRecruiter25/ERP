@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from accounts.permissions import IsAdmin , IsAdminOrHR
 from rest_framework import permissions , generics
 from .serializers import (
     DepartmentSerializer,
@@ -26,19 +27,18 @@ User = get_user_model()
 
 class AdminDashboardSummaryView(APIView):
   
-    permission_classes = [permissions.IsAuthenticated]  # ممكن تخليها IsAdminUser لو حبيتي
+    permission_classes = [IsAdmin]  
 
     def get(self, request):
         today = timezone.now().date()
 
-        # ======== قراءة الفلاتر من الـ Query Params ========
+
         department = request.query_params.get("department")
         role = request.query_params.get("role")
-        status = request.query_params.get("status")          # active / inactive
-        date_from = request.query_params.get("date_from")    # YYYY-MM-DD
-        date_to = request.query_params.get("date_to")        # YYYY-MM-DD
+        status = request.query_params.get("status")          
+        date_from = request.query_params.get("date_from")    
+        date_to = request.query_params.get("date_to")       
 
-        # ======== QuerySets أساسية قبل الفلترة ========
         employees_qs = Employee.objects.select_related("department", "user").all()
         contracts_qs = EmployeeContract.objects.select_related(
             "employee", "employee__department", "employee__user"
@@ -48,21 +48,18 @@ class AdminDashboardSummaryView(APIView):
             "employee", "employee__department", "employee__user"
         ).all()
 
-        # ======== تطبيق فلتر القسم ========
         if department:
-            # هون اعتبرنا إنك عم تبعتي اسم القسم، إذا بدك ID غيريها لـ department_id=department
+            
             employees_qs = employees_qs.filter(department__name__iexact=department)
             contracts_qs = contracts_qs.filter(employee__department__name__iexact=department)
             leave_qs = leave_qs.filter(employee__department__name__iexact=department)
 
-        # ======== تطبيق فلتر الدور ========
         if role:
             users_qs = users_qs.filter(role__iexact=role)
             employees_qs = employees_qs.filter(user__role__iexact=role)
             contracts_qs = contracts_qs.filter(employee__user__role__iexact=role)
             leave_qs = leave_qs.filter(employee__user__role__iexact=role)
 
-        # ======== تطبيق فلتر الحالة (Active / Inactive على مستوى الـ User) ========
         if status == "active":
             users_qs = users_qs.filter(is_active=True)
             employees_qs = employees_qs.filter(user__is_active=True)
@@ -70,7 +67,6 @@ class AdminDashboardSummaryView(APIView):
             users_qs = users_qs.filter(is_active=False)
             employees_qs = employees_qs.filter(user__is_active=False)
 
-        # ======== تطبيق فلتر الفترة الزمنية على العقود (لحساب التعيينات/الخروج) ========
         date_from_obj = None
         date_to_obj = None
 
@@ -92,7 +88,7 @@ class AdminDashboardSummaryView(APIView):
         if date_to_obj:
             contracts_qs = contracts_qs.filter(start_date__lte=date_to_obj)
 
-        # ======== الكروت الأربعة (metrics) باستخدام الـ QuerySets المفلترة ========
+        
         total_employees = employees_qs.count()
 
         active_contracts = contracts_qs.filter(
@@ -101,14 +97,13 @@ class AdminDashboardSummaryView(APIView):
             Q(end_date__isnull=True) | Q(end_date__gte=today)
         ).count()
 
-        # عدد الأقسام بناءً على الموظفين المفلترين (أدق من count لكل الأقسام)
+       
         departments_count = (
             Department.objects.filter(employees__in=employees_qs).distinct().count()
         )
 
         pending_requests = leave_qs.filter(status="pending").count()
 
-        # ======== Employees by Department (Bar chart) ========
         employees_by_department = [
             {
                 "department": row["department__name"] or "Unassigned",
@@ -120,7 +115,6 @@ class AdminDashboardSummaryView(APIView):
                 .order_by("department__name")
         ]
 
-        # ======== Role Distribution (Pie chart) ========
         role_distribution = [
             {
                 "role": row["role"],
@@ -132,7 +126,6 @@ class AdminDashboardSummaryView(APIView):
                 .order_by("role")
         ]
 
-        # ======== Hires vs Exits (Line chart) ========
         hires = (
             contracts_qs
             .annotate(month=TruncMonth("start_date"))
@@ -166,7 +159,6 @@ class AdminDashboardSummaryView(APIView):
             for row in exits if row["month"] is not None
         ]
 
-        # ======== Recent Activity (بدون فلترة زمنية حالياً) ========
         recent_activity = [
             {
                 "user": (log.actor.get_full_name() or log.actor.username) if log.actor else "System",
@@ -204,55 +196,36 @@ class AdminDashboardSummaryView(APIView):
 class DepartmentListCreateView(generics.ListCreateAPIView):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
+    permission_classes = [IsAdminOrHR]
+
 
 
 class DepartmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
+    permission_classes = [IsAdminOrHR]
 
 class RoleListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/admin/roles/      -> list roles
-    POST /api/admin/roles/      -> create new role record
-    """
+
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
 
 class RoleDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET    /api/admin/roles/<id>/
-    PUT    /api/admin/roles/<id>/
-    PATCH  /api/admin/roles/<id>/
-    DELETE /api/admin/roles/<id>/
-    """
+
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
-
-# ================================
-#   System Settings CRUD (Admin)
-# ================================
 
 class SystemSettingListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/admin/settings/      -> list all settings
-    POST /api/admin/settings/      -> create new setting
-    """
     queryset = SystemSetting.objects.all()
     serializer_class = SystemSettingSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
 
 class SystemSettingDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET    /api/admin/settings/<id>/
-    PUT    /api/admin/settings/<id>/
-    PATCH  /api/admin/settings/<id>/
-    DELETE /api/admin/settings/<id>/
-    """
     queryset = SystemSetting.objects.all()
     serializer_class = SystemSettingSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]

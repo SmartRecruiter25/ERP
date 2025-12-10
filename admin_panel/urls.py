@@ -14,14 +14,14 @@ from .views import (
 )
 
 urlpatterns = [
-    # Dashboard
+
     path(
         "dashboard/summary/",
         AdminDashboardSummaryView.as_view(),
         name="admin_dashboard_summary",
     ),
 
-    # Departments CRUD
+
     path(
         "departments/",
         DepartmentListCreateView.as_view(),
@@ -33,7 +33,6 @@ urlpatterns = [
         name="admin_departments_detail",
     ),
 
-    # Roles CRUD
     path(
         "roles/",
         RoleListCreateView.as_view(),
@@ -45,7 +44,7 @@ urlpatterns = [
         name="admin_roles_detail",
     ),
 
-    # System Settings CRUD
+ 
     path(
         "settings/",
         SystemSettingListCreateView.as_view(),

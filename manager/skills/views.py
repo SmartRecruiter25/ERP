@@ -15,7 +15,7 @@ from hr.job_requirements.models import JobRequirementSkill
 from hr.org_structure.models import Company , Department
 from hr.employees.models import Employee, EmployeeStatus
 from hr.skills.models import EmployeeSkill
-from manager.payroll.views import BaseCompanyMixin  
+from accounts.permissions import IsAdminOrHR
 
 
 
@@ -29,7 +29,7 @@ class BaseCompanyMixin:
 
 class SkillsSummaryView(BaseCompanyMixin, APIView):
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -78,7 +78,7 @@ class SkillsSummaryView(BaseCompanyMixin, APIView):
 
 class SkillProofListView(BaseCompanyMixin, APIView):
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -96,7 +96,7 @@ class SkillProofListView(BaseCompanyMixin, APIView):
 
 
 class SkillsOverviewView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated , IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
