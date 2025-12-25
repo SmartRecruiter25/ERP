@@ -1,9 +1,13 @@
 from datetime import datetime
-
+from rest_framework import status
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.conf import settings
+import requests
 
 from manager.attendance.serializers import (
     AttendanceRecordSerializer,
@@ -11,7 +15,7 @@ from manager.attendance.serializers import (
     AttendanceEmployeeSerializer,
 )
 from accounts.permissions import IsAdminOrHR
-from hr.attendance.models import AttendanceRecord, AttendanceStatus
+from hr.attendance.models import AttendanceRecord, AttendanceStatus , EmployeeShiftAssignment
 from hr.employees.models import Employee, EmployeeStatus
 from hr.org_structure.models import Company
 
@@ -148,3 +152,129 @@ class AttendanceEmployeesFilterView(BaseCompanyMixin, APIView):
 
         serializer = AttendanceEmployeeSerializer(qs, many=True)
         return Response(serializer.data)
+
+def get_employee_shift_for_date(employee, day):
+    return (
+        EmployeeShiftAssignment.objects
+        .filter(employee=employee, start_date__lte=day, end_date__gte=day)
+        .order_by("-is_primary", "-start_date")
+        .first()
+    )
+
+
+def notify_ai(payload: dict):
+    # مهم: ما لازم AI يوقف التسجيل
+    try:
+        requests.post(settings.AI_PUNCH_WEBHOOK_URL, json=payload, timeout=5)
+    except Exception:
+        pass
+
+
+class CheckInView(BaseCompanyMixin, APIView):
+    permission_classes = [IsAuthenticated]  # الموظف نفسه لازم يقدر يبصّم
+
+    @transaction.atomic
+    def post(self, request):
+        company = self.get_company(request)
+
+        employee_id = request.data.get("employee_id")
+        if not employee_id:
+            return Response({"success": False, "error": "employee_id is required"}, status=400)
+
+        # ✅ تأكد الموظف موجود وبنفس الشركة
+        try:
+            employee = Employee.objects.select_for_update().get(id=employee_id, company=company)
+        except Employee.DoesNotExist:
+            return Response({"success": False, "error": "Employee not found in your company."}, status=404)
+
+        now = timezone.now()
+        day = timezone.localdate()
+
+        record, created = AttendanceRecord.objects.select_for_update().get_or_create(
+            employee=employee,
+            date=day,
+            defaults={"check_in": now, "status": AttendanceStatus.PRESENT},
+        )
+
+        if not created and record.check_in:
+            return Response({"success": False, "error": "Already checked in today."}, status=400)
+
+        record.check_in = now
+
+        if not record.shift:
+            assign = get_employee_shift_for_date(employee, day)
+            if assign:
+                record.shift = assign.shift
+
+        record.status = AttendanceStatus.PRESENT
+        record.save()
+
+        # ✅ AI بعد الحفظ
+        notify_ai({
+            "event": "check_in",
+            "employee_id": employee.id,
+            "attendance_id": record.id,
+            "timestamp": record.check_in.isoformat() if record.check_in else None,
+            "date": str(record.date),
+            "company_id": company.id if company else None,
+        })
+
+        return Response({
+            "success": True,
+            "action": "check_in",
+            "attendance_id": record.id,
+            "check_in": record.check_in,
+            "date": record.date,
+        })
+
+class CheckOutView(BaseCompanyMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        company = self.get_company(request)
+
+        employee_id = request.data.get("employee_id")
+        if not employee_id:
+            return Response({"success": False, "error": "employee_id is required"}, status=400)
+
+        try:
+            employee = Employee.objects.select_for_update().get(id=employee_id, company=company)
+        except Employee.DoesNotExist:
+            return Response({"success": False, "error": "Employee not found in your company."}, status=404)
+
+        now = timezone.now()
+        day = timezone.localdate()
+
+        try:
+            record = AttendanceRecord.objects.select_for_update().get(employee=employee, date=day)
+        except AttendanceRecord.DoesNotExist:
+            return Response({"success": False, "error": "No check-in found for today."}, status=400)
+
+        if not record.check_in:
+            return Response({"success": False, "error": "No check-in found for today."}, status=400)
+
+        if record.check_out:
+            return Response({"success": False, "error": "Already checked out today."}, status=400)
+
+        record.check_out = now
+        record.save()
+
+        notify_ai({
+            "event": "check_out",
+            "employee_id": employee.id,
+            "attendance_id": record.id,
+            "timestamp": record.check_out.isoformat() if record.check_out else None,
+            "date": str(record.date),
+            "total_hours": float(record.total_hours),
+            "company_id": company.id if company else None,
+        })
+
+        return Response({
+            "success": True,
+            "action": "check_out",
+            "attendance_id": record.id,
+            "check_out": record.check_out,
+            "total_hours": record.total_hours,
+            "date": record.date,
+        })

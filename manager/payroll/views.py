@@ -1,15 +1,25 @@
 from django.db.models import Sum
+from django.db import IntegrityError, transaction
+
 from rest_framework.views import APIView
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+
+from django.shortcuts import get_object_or_404
 
 from manager.payroll.serializers import (
     PayrollRunSerializer,
     PayrollSummarySerializer,
+    PayrollRunCreateSerializer,
 )
+
 from hr.payroll.models import PayrollRun, PayrollRunStatus
 from hr.org_structure.models import Company
 from accounts.permissions import IsAdminOrHR
+from hr.employees.models import Employee, EmployeeStatus
+from hr.payroll.services import generate_payroll_items
+
 
 class BaseCompanyMixin:
     def get_company(self, request):
@@ -20,7 +30,7 @@ class BaseCompanyMixin:
 
 
 class PayrollSummaryView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated , IsAdminOrHR]
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -53,9 +63,7 @@ class PayrollSummaryView(BaseCompanyMixin, APIView):
             last_run_period = None
             employees_in_last_run = 0
 
-        unpaid_qs = runs_qs.filter(
-            status__in=[PayrollRunStatus.DRAFT, PayrollRunStatus.APPROVED]
-        )
+        unpaid_qs = runs_qs.filter(status__in=[PayrollRunStatus.DRAFT, PayrollRunStatus.APPROVED])
         unpaid_total = unpaid_qs.aggregate(total=Sum("total_net"))["total"] or 0
 
         data = {
@@ -72,7 +80,7 @@ class PayrollSummaryView(BaseCompanyMixin, APIView):
 
 
 class PayrollRunListView(BaseCompanyMixin, APIView):
-    permission_classes = [IsAuthenticated , IsAdminOrHR]
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
 
     def get(self, request):
         company = self.get_company(request)
@@ -85,11 +93,72 @@ class PayrollRunListView(BaseCompanyMixin, APIView):
         except ValueError:
             limit = 10
 
-        runs_qs = (
-            PayrollRun.objects
-            .filter(company=company)
-            .order_by("-year", "-month")[:limit]
-        )
-
+        runs_qs = PayrollRun.objects.filter(company=company).order_by("-year", "-month")[:limit]
         serializer = PayrollRunSerializer(runs_qs, many=True)
         return Response(serializer.data)
+
+
+class PayrollRunCreateView(BaseCompanyMixin, APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+
+    def post(self, request):
+        company = self.get_company(request)
+        if not company:
+            return Response({"detail": "Company not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = PayrollRunCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        year = data["year"]
+        month = data["month"]
+        period_start = data["period_start"]
+        period_end = data["period_end"]
+
+        name = f"{period_start.strftime('%B')} {year} Payroll"
+
+        try:
+            run = PayrollRun.objects.create(
+                company=company,
+                name=name,
+                year=year,
+                month=month,
+                period_start=period_start,
+                period_end=period_end,
+                status=PayrollRunStatus.DRAFT,
+            )
+        except IntegrityError:
+            return Response(
+                {"detail": "Payroll run already exists for this company and month."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        out = PayrollRunSerializer(run)
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
+
+class PayrollRunGenerateItemsView(BaseCompanyMixin, APIView):
+   
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+
+    def post(self, request, pk):
+        company = self.get_company(request)
+        if not company:
+            return Response({"detail": "Company not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        run = get_object_or_404(PayrollRun, pk=pk, company=company)
+
+        if run.status != PayrollRunStatus.DRAFT:
+            return Response(
+                {"detail": "You can only generate items when run is DRAFT."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        
+        employees_qs = Employee.objects.filter(company=company, status=EmployeeStatus.ACTIVE)
+
+       
+        with transaction.atomic():
+            result = generate_payroll_items(run, employees_qs=employees_qs)
+
+        return Response(result, status=status.HTTP_200_OK)

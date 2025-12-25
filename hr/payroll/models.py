@@ -1,8 +1,7 @@
-# hr/payroll/models.py
-
+from decimal import Decimal
 from django.db import models
 from django.core.exceptions import ValidationError
-from django.utils import timezone
+from django.db.models import Sum
 
 from hr.org_structure.models import Company
 from hr.employees.models import Employee
@@ -43,13 +42,13 @@ class PayrollRun(models.Model):
     total_gross = models.DecimalField(
         max_digits=14,
         decimal_places=2,
-        default=0,
+        default=Decimal("0.00"),
         help_text="مجموع الرواتب الإجمالي قبل الخصومات."
     )
     total_net = models.DecimalField(
         max_digits=14,
         decimal_places=2,
-        default=0,
+        default=Decimal("0.00"),
         help_text="مجموع صافي الرواتب بعد الخصومات."
     )
 
@@ -70,18 +69,31 @@ class PayrollRun(models.Model):
         return f"{self.company.code} - {self.name}"
 
     def clean(self):
-        if self.period_start and self.period_end:
-            if self.period_start > self.period_end:
-                raise ValidationError(
-                    "تاريخ نهاية دورة الرواتب يجب أن يكون بعد تاريخ البداية."
-                )
+        if self.period_start and self.period_end and self.period_start > self.period_end:
+            raise ValidationError("تاريخ نهاية دورة الرواتب يجب أن يكون بعد تاريخ البداية.")
 
     def recalculate_totals(self):
-        items = self.items.all()
-        self.total_employees = items.count()
-        self.total_gross = sum((i.gross_salary for i in items), 0)
-        self.total_net = sum((i.net_salary for i in items), 0)
+        """
+        ✅ أسرع وأدق: نجمع من DB بدل ما نعمل sum في بايثون
+        """
+        qs = self.items.all()
+        self.total_employees = qs.count()
+
+        agg = qs.aggregate(
+            total_gross=Sum("gross_salary"),
+            total_net=Sum("net_salary"),
+        )
+
+        self.total_gross = agg["total_gross"] or Decimal("0.00")
+        self.total_net = agg["total_net"] or Decimal("0.00")
+
         super().save(update_fields=["total_employees", "total_gross", "total_net"])
+
+
+class PayslipStatus(models.TextChoices):
+    PAID = "paid", "Paid"
+    PENDING = "pending", "Pending"
+    CANCELLED = "cancelled", "Cancelled"
 
 
 class PayrollItem(models.Model):
@@ -101,39 +113,41 @@ class PayrollItem(models.Model):
     allowances = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=0,
+        default=Decimal("0.00"),
         help_text="مجموع البدلات (سكن، مواصلات، ...)."
     )
     overtime_pay = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=0,
+        default=Decimal("0.00"),
         help_text="بدل الساعات الإضافية."
     )
     deductions = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=0,
+        default=Decimal("0.00"),
         help_text="الخصومات (تأخير، غياب، تأمينات، ...)."
     )
 
     gross_salary = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=0,
+        default=Decimal("0.00"),
         help_text="الراتب الإجمالي قبل الخصومات."
     )
     net_salary = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=0,
+        default=Decimal("0.00"),
         help_text="الصافي بعد الخصومات."
     )
 
     currency = models.CharField(max_length=10, default="USD")
 
-    notes = models.TextField(blank=True, null=True)
+    # ✅ مهم للـ Advanced Payroll: نخزن التفاصيل (late/early/overtime/absent/hourly_rate...)
+    breakdown = models.JSONField(default=dict, blank=True)
 
+    notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -147,50 +161,61 @@ class PayrollItem(models.Model):
         return f"{self.payroll_run} - {self.employee.employee_code}"
 
     def calculate_gross(self):
-        return (self.basic_salary or 0) + (self.allowances or 0) + (self.overtime_pay or 0)
+        return (
+            (self.basic_salary or Decimal("0.00")) +
+            (self.allowances or Decimal("0.00")) +
+            (self.overtime_pay or Decimal("0.00"))
+        )
 
     def calculate_net(self):
         gross = self.calculate_gross()
-        return gross - (self.deductions or 0)
+        return gross - (self.deductions or Decimal("0.00"))
 
     def save(self, *args, **kwargs):
+        """
+        kwargs:
+          - skip_totals: إذا عم تولدي items كتير مرة وحدة (bulk) خليها True وبالأخير اعملي recalc مرة وحدة.
+          - skip_payslip: إذا بدك تأجلي إنشاء/تحديث payslip.
+        """
+        skip_totals = bool(kwargs.pop("skip_totals", False))
+        skip_payslip = bool(kwargs.pop("skip_payslip", False))
+
+        # ✅ حماية مالية: منع تعديل/إضافة items بعد ما تترك draft
+        if self.pk and self.payroll_run.status != PayrollRunStatus.DRAFT:
+            raise ValidationError("لا يمكن تعديل Payroll Items بعد اعتماد/ترحيل/دفع الرواتب.")
+        if not self.pk and self.payroll_run.status != PayrollRunStatus.DRAFT:
+            raise ValidationError("لا يمكن إضافة Payroll Item على Payroll Run ليست بحالة Draft.")
 
         self.gross_salary = self.calculate_gross()
         self.net_salary = self.calculate_net()
+
         self.full_clean()
         super().save(*args, **kwargs)
 
-        self.payroll_run.recalculate_totals()
+        # ✅ تحديث totals
+        if not skip_totals:
+            self.payroll_run.recalculate_totals()
 
-        from hr.payroll.models import Payslip, PayslipStatus 
+        # ✅ تحديث/إنشاء Payslip
+        if not skip_payslip:
+            # PAID فقط إذا الـ run صار Paid فعلياً
+            if self.payroll_run.status == PayrollRunStatus.PAID:
+                slip_status = PayslipStatus.PAID
+            else:
+                slip_status = PayslipStatus.PENDING
 
-        if self.payroll_run.status in {
-            PayrollRunStatus.APPROVED,
-            PayrollRunStatus.POSTED,
-            PayrollRunStatus.PAID,
-        }:
-            slip_status = PayslipStatus.PAID
-        else:
-            slip_status = PayslipStatus.PENDING
-
-        Payslip.objects.update_or_create(
-            employee=self.employee,
-            year=self.payroll_run.year,
-            month=self.payroll_run.month,
-            defaults={
-                "payroll_run": self.payroll_run,
-                "payroll_item": self,
-                "net_amount": self.net_salary,
-                "currency": self.currency,
-                "status": slip_status,
-            },
-        )
-
-
-class PayslipStatus(models.TextChoices):
-    PAID = "paid", "Paid"
-    PENDING = "pending", "Pending"
-    CANCELLED = "cancelled", "Cancelled"
+            Payslip.objects.update_or_create(
+                employee=self.employee,
+                year=self.payroll_run.year,
+                month=self.payroll_run.month,
+                defaults={
+                    "payroll_run": self.payroll_run,
+                    "payroll_item": self,
+                    "net_amount": self.net_salary,
+                    "currency": self.currency,
+                    "status": slip_status,
+                },
+            )
 
 
 class Payslip(models.Model):
@@ -217,7 +242,7 @@ class Payslip(models.Model):
     )
 
     year = models.PositiveIntegerField()
-    month = models.PositiveIntegerField() 
+    month = models.PositiveIntegerField()
 
     net_amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=10, default="USD")
@@ -225,7 +250,7 @@ class Payslip(models.Model):
     status = models.CharField(
         max_length=20,
         choices=PayslipStatus.choices,
-        default=PayslipStatus.PAID,
+        default=PayslipStatus.PENDING,  # ✅ صح
     )
 
     file = models.FileField(
