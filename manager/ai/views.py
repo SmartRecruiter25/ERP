@@ -11,6 +11,8 @@ from hr.attendance.models import Shift
 from hr.employees.models import Employee, EmployeeStatus
 from hr.attendance.models import AttendanceRecord, AttendanceStatus
 from hr.org_structure.models import Company , Department
+from .serializers import AIGenerateRequestSerializer
+from .services.ai_client import call_ai, AIServiceError
 
 
 class BaseCompanyMixin:
@@ -289,3 +291,77 @@ class WorkforcePlanningView(BaseCompanyMixin, APIView):
 
         serializer = WorkforcePlanningSerializer(data)
         return Response(serializer.data)
+
+class ResumeReceiveAI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AIGenerateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        payload = {
+            "request_type": "resume_receive",
+            "user": {
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email,
+            },
+            "prompt": serializer.validated_data["prompt"],
+            "context": serializer.validated_data.get("context", {}),
+        }
+
+        try:
+            result = call_ai("resume_receive", payload)
+            return Response({"success": True, "data": result})
+        except AIServiceError as e:
+            return Response({"success": False, "error": str(e)}, status=502)
+
+
+class ResumeMatchAI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AIGenerateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        payload = {
+            "request_type": "resume_match",
+            "user": {
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email,
+            },
+            "prompt": serializer.validated_data["prompt"],
+            "context": serializer.validated_data.get("context", {}),
+        }
+
+        try:
+            result = call_ai("resume_match", payload)
+            return Response({"success": True, "data": result})
+        except AIServiceError as e:
+            return Response({"success": False, "error": str(e)}, status=502)
+
+
+class AttendanceEventAI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AIGenerateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        payload = {
+            "request_type": "attendance_event",
+            "user": {
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email,
+            },
+            "prompt": serializer.validated_data["prompt"],
+            "context": serializer.validated_data.get("context", {}),
+        }
+
+        try:
+            result = call_ai("attendance_event", payload)
+            return Response({"success": True, "data": result})
+        except AIServiceError as e:
+            return Response({"success": False, "error": str(e)}, status=502)

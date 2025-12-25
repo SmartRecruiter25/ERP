@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-948beets8m6&=((8m*d_tfd1hmwjd^we7ejxmh(voqpz_@paak
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*", "127.0.0.1", "localhost", "172.16.30.127"]
+ALLOWED_HOSTS = ["*", "127.0.0.1", "localhost", "192.168.1.113"]
 
 
 # Application definition
@@ -169,4 +169,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+AI_SERVICES = {
+    "resume_receive": "http://localhost:5678/webhook-test/resume/receive",
+    "resume_match": "http://localhost:5678/webhook-test/resume/match",
+    "attendance_event": "http://localhost:5678/webhook-test/attendance/event",
+}
 
+AI_TIMEOUT_SECONDS = 60
