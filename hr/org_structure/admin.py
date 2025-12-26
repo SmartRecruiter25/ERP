@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Company, Department, JobTitle, JobLevel, CompanyNews
+from .models import(
+ Company, 
+ Department,
+  JobTitle, 
+  JobLevel, 
+  CompanyNews , 
+  CompanyNotification , )
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -28,3 +34,10 @@ class CompanyNewsAdmin(admin.ModelAdmin):
     list_display = ("company", "title", "date", "is_pinned", "created_at")
     list_filter = ("company", "is_pinned", "date")
     search_fields = ("title", "company__name", "company__code")
+
+
+@admin.register(CompanyNotification)
+class CompanyNotificationAdmin(admin.ModelAdmin):
+    list_display = ("company", "role", "priority", "is_active", "starts_at", "ends_at", "created_at")
+    list_filter = ("company", "role", "priority", "is_active")
+    search_fields = ("message",)

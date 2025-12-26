@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 class Company(models.Model):
     code = models.CharField(max_length=20, unique=True)  
@@ -83,3 +84,50 @@ class CompanyNews(models.Model):
 
     def __str__(self):
         return f"{self.company.code} - {self.title}"
+
+class NotificationPriority(models.TextChoices):
+    HIGH = "high", "High"
+    MEDIUM = "medium", "Medium"
+    LOW = "low", "Low"
+
+class NotificationRole(models.TextChoices):
+    ADMIN = "admin", "Admin"
+    HR = "hr", "HR"
+    MANAGER = "manager", "Manager"
+    EMPLOYEE = "employee", "Employee"
+    ALL = "all", "All"
+
+class CompanyNotification(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=NotificationRole.choices,
+        default=NotificationRole.ALL,
+    )
+
+    priority = models.CharField(
+        max_length=10,
+        choices=NotificationPriority.choices,
+        default=NotificationPriority.LOW,
+    )
+
+    message = models.CharField(max_length=255)
+    route = models.CharField(max_length=255, blank=True, default="")
+
+    is_active = models.BooleanField(default=True)
+
+    starts_at = models.DateTimeField(default=timezone.now)
+    ends_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.company.code} | {self.role} | {self.priority} | {self.message[:30]}"
