@@ -34,10 +34,6 @@ from .serializers import (
     HRDashboardSummarySerializer,
 )
 
-# =========================================================
-# ✅ Helpers (لازم يكونوا فوق UnifiedDashboardView)
-# =========================================================
-
 def get_annual_leave_entitlement(employee, company, default=24):
     return int(default)
 
@@ -101,15 +97,10 @@ ATTENDANCE_LABELS = {
     AttendanceStatus.REMOTE: "Remote",
 }
 
-# =========================================================
-# ✅ Notifications (DB) + Dynamic Alerts per Role
-# =========================================================
+
 
 def get_custom_notifications(company, role):
-    """
-    Notifications انتِ بتضيفيها من Django Admin (CompanyNotification)
-    بتطلع حسب company + role + الوقت + is_active
-    """
+    
     if not company:
         return []
 
@@ -137,22 +128,15 @@ def get_custom_notifications(company, role):
 
 
 def build_dynamic_alerts(role, company, *, employee=None, team_qs=None):
-    """
-    يجمع:
-    1) Custom DB Notifications
-    2) System Alerts حسب الداتا (Leave/Attendance/Contracts...)
-    """
     alerts = []
     today = timezone.localdate()
 
-    # 1) Custom notifications من DB
+   
     alerts.extend(get_custom_notifications(company, role))
 
-    # 2) System alerts حسب الدور
-
-    # ---- ADMIN ----
+   
     if role == "admin":
-        # مثال ديناميكي: عقود منتهية خلال 14 يوم (لو عندك شركات متعددة)
+        
         expiring = EmployeeContract.objects.filter(
             status=ContractStatus.ACTIVE,
             end_date__gte=today,
@@ -760,9 +744,6 @@ class HRMainDashboardView(HRBaseCompanyMixin, APIView):
         return Response(serializer.data)
 
 
-# =========================================================
-# ✅ UnifiedDashboardView (FINAL - alerts dynamic for all roles)
-# =========================================================
 
 class UnifiedDashboardView(APIView):
     permission_classes = [IsAuthenticated]
@@ -778,7 +759,7 @@ class UnifiedDashboardView(APIView):
         company = get_company_from_user_or_query(request)
         today = timezone.localdate()
 
-        # ===== ADMIN =====
+        
         if role == "admin":
             User = get_user_model()
             total_users = User.objects.count()
@@ -803,18 +784,18 @@ class UnifiedDashboardView(APIView):
                     {"key":"roles_permissions","label":"Roles & Permissions","subtitle":"Configure access control","route":"/admin/roles"},
                     {"key":"system_settings","label":"System Settings","subtitle":"Configure system","route":"/admin/settings"},
                 ],
-                # ✅ dynamic alerts (DB + system)
+                
                 "alerts": build_dynamic_alerts("admin", company),
             }
             return Response(payload)
 
-        # باقي الأدوار بدهن شركة
+        
         if not company:
             return Response({**build_header(request, role), "kpis": [], "quick_actions": [], "alerts": []})
 
         emp_qs = Employee.objects.filter(company=company)
 
-        # ===== HR =====
+        
         if role == "hr":
             total_employees = emp_qs.count()
             active_employees = emp_qs.filter(status=EmployeeStatus.ACTIVE).count()
@@ -845,12 +826,12 @@ class UnifiedDashboardView(APIView):
                     {"key":"payroll","label":"Payroll","subtitle":"Process monthly payroll","route":"/payroll"},
                     {"key":"contracts","label":"Contracts","subtitle":"Manage employee contracts","route":"/contracts"},
                 ],
-                # ✅ dynamic alerts (DB + system)
+                
                 "alerts": build_dynamic_alerts("hr", company),
             }
             return Response(payload)
 
-        # ===== MANAGER =====
+       
         if role == "manager":
             manager_emp = getattr(request.user, "employee_profile", None)
             team_qs = Employee.objects.filter(
@@ -891,12 +872,12 @@ class UnifiedDashboardView(APIView):
                     {"key":"approve_requests","label":"Approve Requests","subtitle":"Pending approvals","route":"/manager/approvals"},
                     {"key":"team_attendance","label":"Team Attendance","subtitle":"Track team presence","route":"/manager/attendance"},
                 ],
-                # ✅ dynamic alerts (DB + system) + team_qs
+                
                 "alerts": build_dynamic_alerts("manager", company, team_qs=team_qs),
             }
             return Response(payload)
 
-        # ===== EMPLOYEE (default) =====
+       
         emp = getattr(request.user, "employee_profile", None)
 
         status_value = "Absent"
@@ -934,7 +915,7 @@ class UnifiedDashboardView(APIView):
                 {"key":"attendance","label":"Attendance","subtitle":"View my attendance","route":"/me/attendance"},
                 {"key":"request_leave","label":"Request Leave","subtitle":"Submit leave request","route":"/me/leaves/request"},
             ],
-            # ✅ dynamic alerts (DB + system) + employee
+            
             "alerts": build_dynamic_alerts("employee", company, employee=emp),
         }
         return Response(payload)

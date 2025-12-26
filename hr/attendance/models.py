@@ -98,7 +98,7 @@ class AttendanceRecord(models.Model):
         default=AttendanceStatus.PRESENT,
     )
 
-    # ✅ Payroll metrics
+    
     total_hours = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0.00"))
     late_minutes = models.PositiveIntegerField(default=0)
     early_leave_minutes = models.PositiveIntegerField(default=0)
